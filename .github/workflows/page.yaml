@@ -1,0 +1,38 @@
+name: Build and Deploy to GH page
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  BuildAndDeploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '14'
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.OS }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.OS }}-node-
+
+      - name: Install Dependencies
+        run: npm ci
+  
+      - name: Build Website
+        run: npx tsc && npx vite build --base=/mulan-quest/
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dist/
+          force_orphan: true
