@@ -40,13 +40,13 @@
                                 </b-col>
                                 <b-col lg="2" sm="3">
                                     <a :href="explorer.VET(item.address)" v-b-tooltip.hover
-                                        :title="bigNumberToFixed(item.VET, 4)" target="_blank">{{ bigNumberToFixed(item.VET,
-                                            0) }}</a>
+                                        :title="bigNumberToFormated(item.VET)" 
+                                        target="_blank">{{ bigNumberToDisplay(item.VET) }}</a>
                                 </b-col>
                                 <b-col lg="2" sm="3">
                                     <a :href="explorer.VTHO(item.address)" v-b-tooltip.hover
-                                        :title="bigNumberToFixed(item.VTHO, 4)"
-                                        target="_blank">{{ bigNumberToFixed(item.VTHO, 0) }}
+                                        :title="bigNumberToFormated(item.VTHO)"
+                                        target="_blank">{{ bigNumberToDisplay(item.VTHO) }}
                                     </a>
                                 </b-col>
                             </b-row>
@@ -88,12 +88,20 @@ const showToast = (str: string) => {
     toaster.value = true
 }
 
-const bigNumberToFixed = (input: string, fixed: number) => {
+const bigNumberToDisplay = (input: string) => {
     if (input === "-") {
         return input
     }
     const bn = new BigNumber(input)
-    return bn.dividedBy(E18).toFixed(fixed)
+    return bn.dividedBy(E18).toFormat(0)
+}
+
+const bigNumberToFormated = (input: string) => {
+    if (input === "-") {
+        return input
+    }
+    const bn = new BigNumber(input)
+    return bn.dividedBy(E18).toFormat()
 }
 
 watch(file, async () => {
