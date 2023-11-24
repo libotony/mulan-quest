@@ -112,8 +112,9 @@ watch(file, async () => {
         list.value = []
         for (const line of lines) {
             if (line.length) {
-                const cell0 = line.split(',')[0]
-                if (/^0x[0-9a-fA-f]{40}/i.test(cell0)) {
+                // sanitize input
+                const cell0 = (line.split(',')[0]||'').replace(/^\s+|\s+$/g, '').toLowerCase()
+                if (/^0x[0-9a-fA-f]{40}$/i.test(cell0)) {
                     list.value.push({
                         address: cell0,
                         VET: '-',
@@ -139,9 +140,12 @@ watch(file, async () => {
                     break
                 }
                 pms.push((async () => {
-                    const account = await thor.account(list.value[k].address).get()
-                    list.value[k].VET = account.balance
-                    list.value[k].VTHO = account.energy
+                    const l =  k
+                    try {
+                        const account = await thor.account(list.value[l].address.toLocaleLowerCase()).get()
+                        list.value[l].VET = account.balance
+                        list.value[l].VTHO = account.energy
+                    } catch{}
                 })())
             }
             await Promise.all(pms)
