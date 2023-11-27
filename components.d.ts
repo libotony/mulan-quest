@@ -6,10 +6,15 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     App: typeof import('./src/App.vue')['default']
+    BButton: typeof import('bootstrap-vue')['BButton']
     BCard: typeof import('bootstrap-vue')['BCard']
     BCol: typeof import('bootstrap-vue')['BCol']
     BContainer: typeof import('bootstrap-vue')['BContainer']
     BFormFile: typeof import('bootstrap-vue')['BFormFile']
+    BIcon: typeof import('bootstrap-vue')['BIcon']
+    BInputGroup: typeof import('bootstrap-vue')['BInputGroup']
+    BInputGroupAppend: typeof import('bootstrap-vue')['BInputGroupAppend']
+    BInputGroupText: typeof import('bootstrap-vue')['BInputGroupText']
     BListGroup: typeof import('bootstrap-vue')['BListGroup']
     BListGroupItem: typeof import('bootstrap-vue')['BListGroupItem']
     BOverlay: typeof import('bootstrap-vue')['BOverlay']

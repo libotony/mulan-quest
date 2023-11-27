@@ -14,9 +14,16 @@
                     <div class="jumbotron">
                         <h1 class="display-5 text-primary">Mulan Quest</h1>
                         <p class="lead">Batch account checker for vechain.</p>
-                        <b-form-file accpet="text/csv" v-model="file" :state="valid"
-                            placeholder="Choose a csv file or drop it here..."
-                            drop-placeholder="Drop csv file here..."></b-form-file>
+                        <hr class="my-4">
+                            <b-input-group>
+                                <b-form-file accpet="text/csv" v-model="file" :state="valid"
+                                    placeholder="Choose a csv file or drop it here..."
+                                    drop-placeholder="Drop csv file here...">
+                                </b-form-file>
+                                <b-input-group-append>
+                                    <b-button :disabled="!downloadable" variant="outline-info" @click="download">Download</b-button>
+                                </b-input-group-append>
+                            </b-input-group>
                     </div>
                 </b-overlay>
             </b-container>
@@ -70,6 +77,8 @@ const list = ref<{ address: string; VET: string; VTHO: string }[]>([])
 const toaster = ref<Boolean>(false)
 const message = ref<string>("")
 const loading = ref<Boolean>(false)
+const downloadable = ref<Boolean>(false)
+let queryTime = 0
 
 const explorer = {
     account: (address: string) => {
@@ -104,6 +113,14 @@ const bigNumberToFormated = (input: string) => {
     return bn.dividedBy(E18).toFormat()
 }
 
+const bigNumberToCSV = (input: string) => {
+    if (input === "-") {
+        return input
+    }
+    const bn = new BigNumber(input)
+    return bn.dividedBy(E18).toFixed(0)
+}
+
 watch(file, async () => {
     if (file.value) {
         if (file.value.type !== 'text/csv') {
@@ -116,7 +133,14 @@ watch(file, async () => {
         const data = dec.decode(raw)
         const lines = data.split('\n')
 
+        if (lines.length === 0) {
+            showToast("No valid address found in the csv file.")
+            valid.value = false
+            return
+        }
+
         loading.value = false
+        downloadable.value = false
         list.value = []
         for (const line of lines) {
             if (line.length) {
@@ -159,10 +183,30 @@ watch(file, async () => {
             await Promise.all(pms)
         }
         loading.value = false
+        downloadable.value = true
+        queryTime = Date.now()
     } else {
         valid.value = null
     }
 })
+
+const download = () => {
+    if (!downloadable.value) {
+        return
+    }
+
+    const content = [["No.", "Address", "VET", "VTHO"].join(",")]
+    for (let i = 0; i < list.value.length; i++) {
+        const item = list.value[i]
+        content.push(`${i + 1},${item.address},${bigNumberToCSV(item.VET)},${bigNumberToCSV(item.VTHO)}`)
+    }
+    const fileName=`MulanQuest-${new Date(queryTime).toISOString()}.csv`
+    const el = document.createElement('a')
+    const blob = new Blob([content.join("\n")], { type: 'text/csv;charset=utf-8;' })
+    el.href = URL.createObjectURL(blob)
+    el.setAttribute('download', fileName)
+    el.click()
+}
 
 </script>
 
