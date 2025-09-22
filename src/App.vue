@@ -88,7 +88,7 @@ const explorer = {
         return `https://explore.vechain.org/accounts/${address}/transfer?token=VET`
     },
     VTHO: (address: string) => {
-        return `https://explore.vechain.org/${address}/transfer?token=VTHO`
+        return `https://explore.vechain.org/accounts/${address}/transfer?token=VTHO`
     }
 }
 
