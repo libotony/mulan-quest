@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer'
-globalThis.Buffer = Buffer
+;(globalThis as any).Buffer = Buffer
 
 import Vue from 'vue'
 import {Connex} from '@vechain/connex'
