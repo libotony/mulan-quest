@@ -6,8 +6,10 @@ import { TooltipPlugin } from 'bootstrap-vue'
 import 'bootstrap/dist/css/bootstrap.css'
 import 'bootstrap-vue/dist/bootstrap-vue.css'
 
+const NODE_URL = 'https://mainnet.vechain.org'
+
 const thor = new Connex.Thor({
-    node: 'https://mainnet.vechain.org',
+    node: NODE_URL,
     network: 'main'
 })
 
@@ -16,5 +18,6 @@ new Vue({
   render: (h) => h(App),
   provide: {
     $thor: thor,
+    $nodeUrl: NODE_URL,
   }
 }).$mount('#app')

@@ -33,28 +33,35 @@
                         <b-list-group-item class="title-with-bg">
                             <b-row>
                                 <b-col lg="1"><strong>NO.</strong></b-col>
-                                <b-col lg="7"><strong>Address</strong></b-col>
+                                <b-col lg="5"><strong>Address</strong></b-col>
                                 <b-col lg="2"><strong>VET</strong></b-col>
+                                <b-col lg="2"><strong>Staked</strong></b-col>
                                 <b-col lg="2"><strong>VTHO</strong></b-col>
                             </b-row>
                         </b-list-group-item>
                         <b-list-group-item v-for="(item, index) in list" :key="index">
                             <b-row class="justify-content-center my-1">
                                 <b-col lg="1"><strong>{{ index + 1 }}</strong></b-col>
-                                <b-col lg="7">
+                                <b-col lg="5">
                                     <a :href="explorer.account(item.address)" class="text-monospace"
                                         target="_blank">{{ item.address }}</a>
                                 </b-col>
                                 <b-col lg="2" sm="3">
-                                    <a :href="explorer.VET(item.address)" v-b-tooltip.hover
-                                        :title="bigNumberToFormated(item.VET)" 
-                                        target="_blank">{{ bigNumberToDisplay(item.VET) }}</a>
+                                    <span v-b-tooltip.hover
+                                        :title="bigNumberToFormated(item.VET)"
+                                        target="_blank">{{ bigNumberToDisplay(item.VET) }}
+                                    </span>
                                 </b-col>
                                 <b-col lg="2" sm="3">
-                                    <a :href="explorer.VTHO(item.address)" v-b-tooltip.hover
+                                    <span v-b-tooltip.hover
+                                        :title="bigNumberToFormated(item.staked)">{{ bigNumberToDisplay(item.staked) }}
+                                    </span>
+                                </b-col>
+                                <b-col lg="2" sm="3">
+                                    <span v-b-tooltip.hover
                                         :title="bigNumberToFormated(item.VTHO)"
                                         target="_blank">{{ bigNumberToDisplay(item.VTHO) }}
-                                    </a>
+                                    </span>
                                 </b-col>
                             </b-row>
                         </b-list-group-item>
@@ -68,27 +75,145 @@
 <script setup lang="ts">
 import { ref, watch, inject } from 'vue'
 import BigNumber from 'bignumber.js'
+import { RLP, blake2b256 } from 'thor-devkit'
+import { Buffer } from 'buffer'
 
 const E18 = new BigNumber(10).pow(18)
 const thor = inject<Connex.Thor>('$thor')!
+const nodeUrl = inject<string>('$nodeUrl')!
 const file = ref<File | null>(null)
 const valid = ref<Boolean | null>(null)
-const list = ref<{ address: string; VET: string; VTHO: string }[]>([])
+const list = ref<{ address: string; VET: string; VTHO: string; staked: string }[]>([])
 const toaster = ref<Boolean>(false)
 const message = ref<string>("")
 const loading = ref<Boolean>(false)
 const downloadable = ref<Boolean>(false)
 let queryTime = 0
 
+const STAKER_ADDRESS = '0x00000000000000000000000000005374616B6572'
+
+const validationQueuedABI = {
+    "anonymous": false,
+    "inputs": [
+        {"indexed": true, "name": "validator", "type": "address"},
+        {"indexed": true, "name": "endorser", "type": "address"},
+        {"indexed": false, "name": "period", "type": "uint32"},
+        {"indexed": false, "name": "stake", "type": "uint256"}
+    ],
+    "name": "ValidationQueued",
+    "type": "event"
+}
+
+class DummyKind extends RLP.ScalarKind {
+    public data(_data: any, _ctx: string) {
+        return { encode() { return Buffer.alloc(0) } }
+    }
+    public buffer(_buf: Buffer, _ctx: string) {
+        return { decode() { return null } }
+    }
+}
+
+async function fetchRawStorage(address: string, key: string): Promise<string> {
+    const url = `${nodeUrl}/accounts/${address}/storage/raw/${key}`
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`Failed to fetch raw storage: ${response.statusText}`)
+    const data = await response.json() as { value: string }
+    return data.value
+}
+
+async function getValidationDetail(validatorAddress: string): Promise<{
+    lockedVET: number | string
+    queuedVET: number | string
+    cooldownVET: number | string
+    withdrawableVET: number | string
+} | null> {
+    try {
+        const addressBytes = Buffer.from(validatorAddress.slice(2), 'hex')
+        const validationsBytes = Buffer.from('validations', 'utf8')
+        const suffix = Buffer.alloc(32)
+        validationsBytes.copy(suffix, 32 - validationsBytes.length)
+        const key = '0x' + blake2b256(new Uint8Array(addressBytes), new Uint8Array(suffix)).toString('hex')
+        const rawValue = await fetchRawStorage(STAKER_ADDRESS, key)
+        if (!rawValue || rawValue === '0x' || rawValue === '0x0') return null
+
+        const data = Buffer.from(rawValue.slice(2), 'hex')
+        const profile = new RLP({
+            name: 'validation',
+            kind: [
+                { name: 'endorser', kind: new DummyKind() },
+                { name: 'beneficiary', kind: new DummyKind() },
+                { name: 'period', kind: new DummyKind() },
+                { name: 'completedPeriods', kind: new DummyKind() },
+                { name: 'status', kind: new DummyKind() },
+                { name: 'startBlock', kind: new DummyKind() },
+                { name: 'exitBlock', kind: new DummyKind() },
+                { name: 'offlineBlock', kind: new DummyKind() },
+                { name: 'lockedVET', kind: new RLP.NumericKind(8) },
+                { name: 'pendingUnlockVET', kind: new DummyKind() },
+                { name: 'queuedVET', kind: new RLP.NumericKind(8) },
+                { name: 'cooldownVET', kind: new RLP.NumericKind(8) },
+                { name: 'withdrawableVET', kind: new RLP.NumericKind(8) },
+                { name: 'weight', kind: new DummyKind() },
+                { name: 'linkedListEntry', kind: [{ name: 'prev', kind: new DummyKind() }, { name: 'next', kind: new DummyKind() }] }
+            ]
+        })
+        const decoded = profile.decode(data) as any
+        return {
+            lockedVET: decoded.lockedVET || 0,
+            queuedVET: decoded.queuedVET || 0,
+            cooldownVET: decoded.cooldownVET || 0,
+            withdrawableVET: decoded.withdrawableVET || 0
+        }
+    } catch {
+        return null
+    }
+}
+
+async function getEndorserTotalVET(endorserAddress: string): Promise<string> {
+    try {
+        // Step 1: Find all validators for this endorser via ValidationQueued events
+        const eventFilter = thor.account(STAKER_ADDRESS)
+            .event(validationQueuedABI)
+            .filter([{ endorser: endorserAddress }])
+
+        const PAGE_SIZE = 256
+        const allValidatorAddresses: string[] = []
+        let offset = 0
+        while (true) {
+            const logs = await eventFilter.order('asc').apply(offset, PAGE_SIZE)
+            if (logs.length === 0) break
+            for (const log of logs) {
+                allValidatorAddresses.push(log.decoded.validator)
+            }
+            if (logs.length < PAGE_SIZE) break
+            offset += PAGE_SIZE
+        }
+        const validatorAddresses = [...new Set(allValidatorAddresses)]
+        if (validatorAddresses.length === 0) return '0'
+
+        // Step 2: Get validation detail for each validator and aggregate
+        let total = BigInt(0)
+        const results = await Promise.allSettled(
+            validatorAddresses.map(addr => getValidationDetail(addr))
+        )
+        for (const result of results) {
+            if (result.status !== 'fulfilled' || !result.value) continue
+            const d = result.value
+            // Storage values are in VET units, multiply by 1e18 to get wei
+            total += BigInt(d.lockedVET) * BigInt(1e18)
+            total += BigInt(d.queuedVET) * BigInt(1e18)
+            total += BigInt(d.cooldownVET) * BigInt(1e18)
+            total += BigInt(d.withdrawableVET) * BigInt(1e18)
+        }
+        return total.toString()
+    } catch {
+        return '-'
+    }
+}
+
 const explorer = {
     account: (address: string) => {
-        return `https://explore.vechain.org/accounts/${address}`
-    },
-    VET: (address: string) => {
-        return `https://explore.vechain.org/accounts/${address}/transfer?token=VET`
-    },
-    VTHO: (address: string) => {
-        return `https://explore.vechain.org/accounts/${address}/transfer?token=VTHO`
+        return `https://explore.vechain.org/address/${address}`
     }
 }
 
@@ -150,7 +275,8 @@ watch(file, async () => {
                     list.value.push({
                         address: cell0,
                         VET: '-',
-                        VTHO: '-'
+                        VTHO: '-',
+                        staked: '-'
                     })
                 }
             }
@@ -178,6 +304,9 @@ watch(file, async () => {
                         list.value[l].VET = account.balance
                         list.value[l].VTHO = account.energy
                     } catch{}
+                    try {
+                        list.value[l].staked = await getEndorserTotalVET(list.value[l].address.toLocaleLowerCase())
+                    } catch{}
                 })())
             }
             await Promise.all(pms)
@@ -195,10 +324,10 @@ const download = () => {
         return
     }
 
-    const content = [["No.", "Address", "VET", "VTHO"].join(",")]
+    const content = [["No.", "Address", "VET", "Staked", "VTHO"].join(",")]
     for (let i = 0; i < list.value.length; i++) {
         const item = list.value[i]
-        content.push(`${i + 1},${item.address},${bigNumberToCSV(item.VET)},${bigNumberToCSV(item.VTHO)}`)
+        content.push(`${i + 1},${item.address},${bigNumberToCSV(item.VET)},${bigNumberToCSV(item.staked)},${bigNumberToCSV(item.VTHO)}`)
     }
     const fileName=`MulanQuest-${new Date(queryTime).toISOString()}.csv`
     const el = document.createElement('a')
