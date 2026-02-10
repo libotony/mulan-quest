@@ -76,7 +76,6 @@
 import { ref, watch, inject } from 'vue'
 import BigNumber from 'bignumber.js'
 import { RLP, blake2b256 } from 'thor-devkit'
-import { Buffer } from 'buffer'
 
 const E18 = new BigNumber(10).pow(18)
 const thor = inject<Connex.Thor>('$thor')!
@@ -132,11 +131,12 @@ async function getValidationDetail(validatorAddress: string): Promise<{
         const validationsBytes = Buffer.from('validations', 'utf8')
         const suffix = Buffer.alloc(32)
         validationsBytes.copy(suffix, 32 - validationsBytes.length)
-        const key = '0x' + blake2b256(new Uint8Array(addressBytes), new Uint8Array(suffix)).toString('hex')
+        const key = '0x' + (blake2b256 as any)(addressBytes, suffix).toString('hex')
         const rawValue = await fetchRawStorage(STAKER_ADDRESS, key)
         if (!rawValue || rawValue === '0x' || rawValue === '0x0') return null
 
         const data = Buffer.from(rawValue.slice(2), 'hex')
+
         const profile = new RLP({
             name: 'validation',
             kind: [

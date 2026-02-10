@@ -1,3 +1,6 @@
+import { Buffer } from 'buffer'
+globalThis.Buffer = Buffer
+
 import Vue from 'vue'
 import {Connex} from '@vechain/connex'
 import App from './App.vue'
